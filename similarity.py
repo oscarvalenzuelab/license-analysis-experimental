@@ -1,8 +1,18 @@
 import requests
-from difflib import SequenceMatcher
 import re
 import os
 from collections import Counter
+from nltk.corpus import stopwords, wordnet
+from nltk.stem import WordNetLemmatizer
+import nltk
+
+# Download NLTK data if not already available
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+# Initialize stopwords and lemmatizer
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
 
 # SPDX license list text file URL template
 spdx_text_url_template = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/{}.txt"
@@ -37,18 +47,24 @@ def fetch_or_load_license_text(license_id):
     except requests.RequestException as e:
         return ""
 
-# Function to clean and tokenize text (remove punctuation, split words, lowercased)
+# Function to clean and tokenize text (normalize by removing stopwords, lemmatizing, etc.)
 def clean_and_tokenize(text):
-    # Remove punctuation and convert to lower case
-    cleaned = re.sub(r'[^\w\s]', '', text.lower())
-    return cleaned.split()
+    # Lowercase and remove non-alphanumeric characters except dots, remove trailing dots, and keep numbers
+    cleaned = re.sub(r'[^\w\s\.]', '', text.lower())  # Retain dots and numbers
+    cleaned = re.sub(r'\.\s', ' ', cleaned)  # Remove trailing dots at the end of words
+
+    # Tokenize words, remove stopwords, and lemmatize them
+    tokens = cleaned.split()
+    normalized = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+
+    return normalized
 
 # Function to identify common and different words in license group
 def identify_similar_and_different_words(licenses, group_licenses):
     group_texts = {}
     word_counts = Counter()
 
-    # Fetch and tokenize the text for each license in the group
+    # Fetch and normalize the text for each license in the group
     for license_id in group_licenses:
         license_text = fetch_or_load_license_text(license_id)
         if license_text:
@@ -60,9 +76,9 @@ def identify_similar_and_different_words(licenses, group_licenses):
     common_words = [word for word, count in word_counts.items() if count == len(group_licenses)]
     unique_words = {license_id: [] for license_id in group_licenses}
 
-    # Identify unique words for each license
+    # Identify unique words for each license, ensure no duplicates, and filter out words shorter than 2 characters
     for license_id, tokenized_text in group_texts.items():
-        unique_words[license_id] = [word for word in tokenized_text if word not in common_words]
+        unique_words[license_id] = list(set([word for word in tokenized_text if word not in common_words and len(word) > 1]))
 
     return common_words, unique_words
 
