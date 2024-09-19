@@ -128,7 +128,8 @@ def group_licenses_by_prefix(licenses):
         clean_name = clean_group_name(prefix)
 
         # Store the group if it has more than one license
-        groups[clean_name] = current_group
+        if len(current_group) > 1:
+            groups[clean_name] = current_group
 
     return groups
 
